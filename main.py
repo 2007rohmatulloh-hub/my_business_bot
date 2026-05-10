@@ -2,10 +2,13 @@ import asyncio
 import sqlite3
 import os
 
-from aiogram import Bot, Dispatcher, types, F
+from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
-from aiogram.types import Message
-
+from aiogram.types import (
+    Message,
+    ReplyKeyboardMarkup,
+    KeyboardButton
+)
 
 API_TOKEN = os.getenv("BOT_TOKEN")
 
@@ -14,7 +17,19 @@ dp = Dispatcher()
 
 
 # ONLY YOU CAN USE BOT
-ALLOWED_USERS = [5798769777]
+ALLOWED_USERS = [15798769777]
+
+
+# MENU
+menu = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="/add"), KeyboardButton(text="/sell")],
+        [KeyboardButton(text="/products"), KeyboardButton(text="/stats")],
+        [KeyboardButton(text="/edit"), KeyboardButton(text="/delete")],
+        [KeyboardButton(text="/search")]
+    ],
+    resize_keyboard=True
+)
 
 
 # DATABASE
@@ -48,7 +63,11 @@ conn.commit()
 async def check_user(message: Message):
 
     if message.from_user.id not in ALLOWED_USERS:
-        await message.answer("❌ Siz bu botdan foydalana olmaysiz")
+
+        await message.answer(
+            "❌ Siz bu botdan foydalana olmaysiz"
+        )
+
         return False
 
     return True
@@ -70,13 +89,15 @@ Commands:
 /sell
 /products
 /stats
-/colst
-/cost
-/budget
-/profit
+/edit
+/delete
+/search
 """
 
-    await message.answer(text)
+    await message.answer(
+        text,
+        reply_markup=menu
+    )
 
 
 # ADD PRODUCT
@@ -96,13 +117,29 @@ async def add_product(message: Message):
         sell_price = int(lines[4])
 
         cur.execute(
-            "INSERT INTO products(name, quantity, buy_price, sell_price) VALUES(?,?,?,?)",
-            (name, quantity, buy_price, sell_price)
+            """
+            INSERT INTO products(
+                name,
+                quantity,
+                buy_price,
+                sell_price
+            )
+            VALUES(?,?,?,?)
+            """,
+            (
+                name,
+                quantity,
+                buy_price,
+                sell_price
+            )
         )
 
         conn.commit()
 
-        await message.answer("✅ Mahsulot qo'shildi")
+        await message.answer(
+            "✅ Mahsulot qo'shildi",
+            reply_markup=menu
+        )
 
     except:
 
@@ -117,7 +154,8 @@ Sariq penka
 2
 121000
 170000
-"""
+""",
+            reply_markup=menu
         )
 
 
@@ -133,7 +171,12 @@ async def products(message: Message):
     products = cur.fetchall()
 
     if not products:
-        await message.answer("❌ Mahsulot yo'q")
+
+        await message.answer(
+            "❌ Mahsulot yo'q",
+            reply_markup=menu
+        )
+
         return
 
     text = "📦 Products:\n\n"
@@ -148,7 +191,10 @@ async def products(message: Message):
             f"Sell: {product[4]}\n\n"
         )
 
-    await message.answer(text)
+    await message.answer(
+        text,
+        reply_markup=menu
+    )
 
 
 # SELL PRODUCT
@@ -167,41 +213,78 @@ async def sell_product(message: Message):
         sold_price = int(lines[3])
 
         cur.execute(
-            "SELECT quantity, buy_price FROM products WHERE id=?",
+            """
+            SELECT quantity, buy_price
+            FROM products
+            WHERE id=?
+            """,
             (product_id,)
         )
 
         product = cur.fetchone()
 
         if not product:
-            await message.answer("❌ Product topilmadi")
+
+            await message.answer(
+                "❌ Product topilmadi",
+                reply_markup=menu
+            )
+
             return
 
         current_quantity = product[0]
         buy_price = product[1]
 
         if quantity_sold > current_quantity:
-            await message.answer("❌ Yetarli mahsulot yo'q")
+
+            await message.answer(
+                "❌ Yetarli mahsulot yo'q",
+                reply_markup=menu
+            )
+
             return
 
         new_quantity = current_quantity - quantity_sold
 
         cur.execute(
-            "UPDATE products SET quantity=? WHERE id=?",
-            (new_quantity, product_id)
+            """
+            UPDATE products
+            SET quantity=?
+            WHERE id=?
+            """,
+            (
+                new_quantity,
+                product_id
+            )
         )
 
-        profit = sold_price - (buy_price * quantity_sold)
+        profit = sold_price - (
+            buy_price * quantity_sold
+        )
 
         cur.execute(
-            "INSERT INTO sales(product_id, quantity, sold_price, profit) VALUES(?,?,?,?)",
-            (product_id, quantity_sold, sold_price, profit)
+            """
+            INSERT INTO sales(
+                product_id,
+                quantity,
+                sold_price,
+                profit
+            )
+            VALUES(?,?,?,?)
+            """,
+            (
+                product_id,
+                quantity_sold,
+                sold_price,
+                profit
+            )
         )
 
         conn.commit()
 
         await message.answer(
-            f"✅ Sotildi\n\n💰 Profit: {profit} so'm"
+            f"✅ Sotildi\n\n💰 Profit: {profit} so'm",
+            reply_markup=menu
         )
 
     except:
@@ -216,7 +299,8 @@ Example:
 1
 1
 170000
-"""
+""",
+            reply_markup=menu
         )
 
 
@@ -227,16 +311,28 @@ async def stats(message: Message):
     if not await check_user(message):
         return
 
-    cur.execute("SELECT COUNT(*) FROM products")
+    cur.execute(
+        "SELECT COUNT(*) FROM products"
+    )
+
     products_count = cur.fetchone()[0]
 
-    cur.execute("SELECT SUM(quantity) FROM products")
+    cur.execute(
+        "SELECT SUM(quantity) FROM products"
+    )
+
     total_quantity = cur.fetchone()[0]
 
-    cur.execute("SELECT SUM(sold_price) FROM sales")
+    cur.execute(
+        "SELECT SUM(sold_price) FROM sales"
+    )
+
     total_sales = cur.fetchone()[0]
 
-    cur.execute("SELECT SUM(profit) FROM sales")
+    cur.execute(
+        "SELECT SUM(profit) FROM sales"
+    )
+
     total_profit = cur.fetchone()[0]
 
     total_quantity = total_quantity or 0
@@ -252,87 +348,198 @@ async def stats(message: Message):
 📈 Profit: {total_profit}
 """
 
-    await message.answer(text)
+    await message.answer(
+        text,
+        reply_markup=menu
+    )
 
 
-# HOW MUCH PRODUCTS COST YOU
-@dp.message(Command("colst"))
-async def colst(message: Message):
+# EDIT PRODUCT
+@dp.message(Command("edit"))
+async def edit_product(message: Message):
 
     if not await check_user(message):
         return
 
-    cur.execute(
-        "SELECT SUM(quantity * buy_price) FROM products"
-    )
+    try:
 
-    total = cur.fetchone()[0]
+        lines = message.text.split("\n")
 
-    total = total or 0
+        product_id = int(lines[1])
+        name = lines[2]
+        quantity = int(lines[3])
+        buy_price = int(lines[4])
+        sell_price = int(lines[5])
 
-    await message.answer(
-        f"📦 Sizning mahsulotlaringiz tannarxi: {total} so'm"
-    )
+        cur.execute(
+            """
+            UPDATE products
+            SET
+                name=?,
+                quantity=?,
+                buy_price=?,
+                sell_price=?
+            WHERE id=?
+            """,
+            (
+                name,
+                quantity,
+                buy_price,
+                sell_price,
+                product_id
+            )
+        )
+
+        conn.commit()
+
+        await message.answer(
+            "✅ Mahsulot yangilandi",
+            reply_markup=menu
+        )
+
+    except:
+
+        await message.answer(
+            """
+❌ Format noto'g'ri
+
+Example:
+
+/edit
+1
+Ruz mari
+5
+84000
+150000
+""",
+            reply_markup=menu
+        )
 
 
-# HOW MUCH YOU CAN SELL ALL PRODUCTS
-@dp.message(Command("cost"))
-async def cost(message: Message):
+# DELETE PRODUCT
+@dp.message(Command("delete"))
+async def delete_product(message: Message):
 
     if not await check_user(message):
         return
 
-    cur.execute(
-        "SELECT SUM(quantity * sell_price) FROM products"
-    )
+    try:
 
-    total = cur.fetchone()[0]
+        lines = message.text.split("\n")
 
-    total = total or 0
+        product_id = int(lines[1])
 
-    await message.answer(
-        f"💰 Hamma mahsulot sotilsa: {total} so'm"
-    )
+        cur.execute(
+            """
+            DELETE FROM products
+            WHERE id=?
+            """,
+            (product_id,)
+        )
+
+        conn.commit()
+
+        await message.answer(
+            "🗑 Mahsulot o'chirildi",
+            reply_markup=menu
+        )
+
+    except:
+
+        await message.answer(
+            """
+❌ Format noto'g'ri
+
+Example:
+
+/delete
+1
+""",
+            reply_markup=menu
+        )
 
 
-# TOTAL SOLD MONEY
-@dp.message(Command("budget"))
-async def budget(message: Message):
+# SEARCH
+@dp.message(Command("search"))
+async def search_product(message: Message):
 
     if not await check_user(message):
         return
 
-    cur.execute(
-        "SELECT SUM(sold_price) FROM sales"
-    )
+    try:
 
-    total = cur.fetchone()[0]
+        lines = message.text.split("\n")
 
-    total = total or 0
+        query = lines[1]
 
-    await message.answer(
-        f"💵 Umumiy sotuv: {total} so'm"
-    )
+        if query.isdigit():
 
+            cur.execute(
+                """
+                SELECT *
+                FROM products
+                WHERE id=?
+                """,
+                (int(query),)
+            )
 
-# CLEAN PROFIT
-@dp.message(Command("profit"))
-async def profit(message: Message):
+        else:
 
-    if not await check_user(message):
-        return
+            cur.execute(
+                """
+                SELECT *
+                FROM products
+                WHERE name LIKE ?
+                """,
+                (f"%{query}%",)
+            )
 
-    cur.execute(
-        "SELECT SUM(profit) FROM sales"
-    )
+        products = cur.fetchall()
 
-    total = cur.fetchone()[0]
+        if not products:
 
-    total = total or 0
+            await message.answer(
+                "❌ Mahsulot topilmadi",
+                reply_markup=menu
+            )
 
-    await message.answer(
-        f"📈 Sof foyda: {total} so'm"
-    )
+            return
+
+        text = "🔍 Search results:\n\n"
+
+        for product in products:
+
+            text += (
+                f"ID: {product[0]}\n"
+                f"Name: {product[1]}\n"
+                f"Quantity: {product[2]}\n"
+                f"Buy: {product[3]}\n"
+                f"Sell: {product[4]}\n\n"
+            )
+
+        await message.answer(
+            text,
+            reply_markup=menu
+        )
+
+    except:
+
+        await message.answer(
+            """
+❌ Format noto'g'ri
+
+Example:
+
+/search
+Ruz
+
+yoki
+
+/search
+1
+""",
+            reply_markup=menu
+        )
 
 
 # MAIN
@@ -345,23 +552,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-# HOW TO USE
-
-## /add
-
-# ```text
-# /add
-# Sariq penka
-2
-121000
-170000
-# ````````````
-
-## /sell
-
-# /sell
-1
-1
-170000
-
