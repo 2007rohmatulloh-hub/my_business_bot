@@ -107,6 +107,23 @@ async def add_product(message: Message):
     if not await check_user(message):
         return
 
+    if message.text.strip() == "/add":
+
+        await message.answer(
+            """
+Example:
+
+/add
+Sariq penka
+2
+121000
+170000
+""",
+            reply_markup=menu
+        )
+
+        return
+
     try:
 
         lines = message.text.split("\n")
@@ -158,7 +175,6 @@ Sariq penka
             reply_markup=menu
         )
 
-
 # PRODUCTS
 @dp.message(Command("products"))
 async def products(message: Message):
@@ -198,10 +214,31 @@ async def products(message: Message):
 
 
 # SELL PRODUCT
+# SELL PRODUCT
 @dp.message(Command("sell"))
 async def sell_product(message: Message):
 
     if not await check_user(message):
+        return
+
+    if message.text.strip() == "/sell":
+
+        await message.answer(
+            """
+Example:
+
+/sell
+1
+3
+150000
+
+1 = product ID
+3 = quantity
+150000 = 1 ta narxi
+""",
+            reply_markup=menu
+        )
+
         return
 
     try:
@@ -258,7 +295,9 @@ async def sell_product(message: Message):
             )
         )
 
-        profit = sold_price - (
+        total_sale = sold_price * quantity_sold
+
+        profit = total_sale - (
             buy_price * quantity_sold
         )
 
@@ -275,7 +314,7 @@ async def sell_product(message: Message):
             (
                 product_id,
                 quantity_sold,
-                sold_price,
+                total_sale,
                 profit
             )
         )
@@ -283,7 +322,12 @@ async def sell_product(message: Message):
         conn.commit()
 
         await message.answer(
-            f"✅ Sotildi\n\n💰 Profit: {profit} so'm",
+            f"""
+✅ Sotildi
+
+💵 Sotuv: {total_sale} so'm
+💰 Profit: {profit} so'm
+""",
             reply_markup=menu
         )
 
@@ -297,12 +341,15 @@ Example:
 
 /sell
 1
-1
-170000
+3
+150000
+
+1 = product ID
+3 = quantity
+150000 = 1 ta narxi
 """,
             reply_markup=menu
         )
-
 
 # STATS
 @dp.message(Command("stats"))
@@ -355,10 +402,29 @@ async def stats(message: Message):
 
 
 # EDIT PRODUCT
+# EDIT PRODUCT
 @dp.message(Command("edit"))
 async def edit_product(message: Message):
 
     if not await check_user(message):
+        return
+
+    if message.text.strip() == "/edit":
+
+        await message.answer(
+            """
+Example:
+
+/edit
+1
+Ruz mari
+5
+84000
+150000
+""",
+            reply_markup=menu
+        )
+
         return
 
     try:
@@ -415,12 +481,26 @@ Ruz mari
             reply_markup=menu
         )
 
-
+# DELETE PRODUCT
 # DELETE PRODUCT
 @dp.message(Command("delete"))
 async def delete_product(message: Message):
 
     if not await check_user(message):
+        return
+
+    if message.text.strip() == "/delete":
+
+        await message.answer(
+            """
+Example:
+
+/delete
+1
+""",
+            reply_markup=menu
+        )
+
         return
 
     try:
@@ -457,8 +537,6 @@ Example:
 """,
             reply_markup=menu
         )
-
-
 # SEARCH
 @dp.message(Command("search"))
 async def search_product(message: Message):
