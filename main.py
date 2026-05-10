@@ -1,6 +1,6 @@
 import asyncio
-import sqlite3
 import os
+import psycopg2
 
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
@@ -23,22 +23,26 @@ ALLOWED_USERS = [5798769777]
 # MENU
 menu = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="/add"), KeyboardButton(text="/sell")],
-        [KeyboardButton(text="/products"), KeyboardButton(text="/stats")],
-        [KeyboardButton(text="/edit"), KeyboardButton(text="/delete")],
-        [KeyboardButton(text="/search")]
+        [KeyboardButton(text="/add"), KeyboardButton(text="/bulkadd")],
+        [KeyboardButton(text="/sell"), KeyboardButton(text="/products")],
+        [KeyboardButton(text="/stats"), KeyboardButton(text="/edit")],
+        [KeyboardButton(text="/delete"), KeyboardButton(text="/search")]
     ],
     resize_keyboard=True
 )
 
 
-# DATABASE
-conn = sqlite3.connect("shop.db")
+# POSTGRESQL
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+conn = psycopg2.connect(DATABASE_URL)
 cur = conn.cursor()
 
+
+# CREATE TABLES
 cur.execute("""
 CREATE TABLE IF NOT EXISTS products(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT,
     quantity INTEGER,
     buy_price INTEGER,
@@ -48,7 +52,7 @@ CREATE TABLE IF NOT EXISTS products(
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS sales(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     product_id INTEGER,
     quantity INTEGER,
     sold_price INTEGER,
@@ -86,6 +90,7 @@ async def start(message: Message):
 Commands:
 
 /add
+/bulkadd
 /sell
 /products
 /stats
@@ -141,7 +146,7 @@ Sariq penka
                 buy_price,
                 sell_price
             )
-            VALUES(?,?,?,?)
+            VALUES(%s,%s,%s,%s)
             """,
             (
                 name,
@@ -175,6 +180,98 @@ Sariq penka
             reply_markup=menu
         )
 
+
+# BULK ADD
+@dp.message(Command("bulkadd"))
+async def bulk_add(message: Message):
+
+    if not await check_user(message):
+        return
+
+    if message.text.strip() == "/bulkadd":
+
+        await message.answer(
+            """
+Example:
+
+/bulkadd
+
+Sariq penka 2ta 121000 170000
+Oyoq krem 2ta 41000 70000
+Atir 1ta 67000 125000
+""",
+            reply_markup=menu
+        )
+
+        return
+
+    try:
+
+        lines = message.text.split("\n")[1:]
+
+        added = 0
+
+        for line in lines:
+
+            if not line.strip():
+                continue
+
+            parts = line.split()
+
+            sell_price = int(parts[-1])
+            buy_price = int(parts[-2])
+
+            quantity_text = parts[-3]
+
+            quantity = int(
+                quantity_text.replace("ta", "")
+            )
+
+            name = " ".join(parts[:-3])
+
+            cur.execute(
+                """
+                INSERT INTO products(
+                    name,
+                    quantity,
+                    buy_price,
+                    sell_price
+                )
+                VALUES(%s,%s,%s,%s)
+                """,
+                (
+                    name,
+                    quantity,
+                    buy_price,
+                    sell_price
+                )
+            )
+
+            added += 1
+
+        conn.commit()
+
+        await message.answer(
+            f"✅ {added} ta mahsulot qo'shildi",
+            reply_markup=menu
+        )
+
+    except Exception as e:
+
+        await message.answer(
+            f"""
+❌ Error
+
+Example:
+
+/bulkadd
+
+Sariq penka 2ta 121000 170000
+Oyoq krem 2ta 41000 70000
+Atir 1ta 67000 125000
+""",
+            reply_markup=menu
+        )
 # PRODUCTS
 @dp.message(Command("products"))
 async def products(message: Message):
@@ -214,7 +311,6 @@ async def products(message: Message):
 
 
 # SELL PRODUCT
-# SELL PRODUCT
 @dp.message(Command("sell"))
 async def sell_product(message: Message):
 
@@ -253,7 +349,7 @@ Example:
             """
             SELECT quantity, buy_price
             FROM products
-            WHERE id=?
+            WHERE id=%s
             """,
             (product_id,)
         )
@@ -286,8 +382,8 @@ Example:
         cur.execute(
             """
             UPDATE products
-            SET quantity=?
-            WHERE id=?
+            SET quantity=%s
+            WHERE id=%s
             """,
             (
                 new_quantity,
@@ -309,7 +405,7 @@ Example:
                 sold_price,
                 profit
             )
-            VALUES(?,?,?,?)
+            VALUES(%s,%s,%s,%s)
             """,
             (
                 product_id,
@@ -343,13 +439,10 @@ Example:
 1
 3
 150000
-
-1 = product ID
-3 = quantity
-150000 = 1 ta narxi
 """,
             reply_markup=menu
         )
+
 
 # STATS
 @dp.message(Command("stats"))
@@ -402,7 +495,6 @@ async def stats(message: Message):
 
 
 # EDIT PRODUCT
-# EDIT PRODUCT
 @dp.message(Command("edit"))
 async def edit_product(message: Message):
 
@@ -441,11 +533,11 @@ Ruz mari
             """
             UPDATE products
             SET
-                name=?,
-                quantity=?,
-                buy_price=?,
-                sell_price=?
-            WHERE id=?
+                name=%s,
+                quantity=%s,
+                buy_price=%s,
+                sell_price=%s
+            WHERE id=%s
             """,
             (
                 name,
@@ -481,7 +573,7 @@ Ruz mari
             reply_markup=menu
         )
 
-# DELETE PRODUCT
+
 # DELETE PRODUCT
 @dp.message(Command("delete"))
 async def delete_product(message: Message):
@@ -512,7 +604,7 @@ Example:
         cur.execute(
             """
             DELETE FROM products
-            WHERE id=?
+            WHERE id=%s
             """,
             (product_id,)
         )
@@ -537,6 +629,8 @@ Example:
 """,
             reply_markup=menu
         )
+
+
 # SEARCH
 @dp.message(Command("search"))
 async def search_product(message: Message):
@@ -556,7 +650,7 @@ async def search_product(message: Message):
                 """
                 SELECT *
                 FROM products
-                WHERE id=?
+                WHERE id=%s
                 """,
                 (int(query),)
             )
@@ -567,7 +661,7 @@ async def search_product(message: Message):
                 """
                 SELECT *
                 FROM products
-                WHERE name LIKE ?
+                WHERE name ILIKE %s
                 """,
                 (f"%{query}%",)
             )
