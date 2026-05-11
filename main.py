@@ -26,7 +26,8 @@ menu = ReplyKeyboardMarkup(
         [KeyboardButton(text="/add"), KeyboardButton(text="/bulkadd")],
         [KeyboardButton(text="/sell"), KeyboardButton(text="/products")],
         [KeyboardButton(text="/stats"), KeyboardButton(text="/edit")],
-        [KeyboardButton(text="/delete"), KeyboardButton(text="/search")]
+        [KeyboardButton(text="/delete"), KeyboardButton(text="/search")],
+        [KeyboardButton(text="/month"), KeyboardButton(text="/sales")]
     ],
     resize_keyboard=True
 )
@@ -40,6 +41,7 @@ cur = conn.cursor()
 
 
 # CREATE TABLES
+
 cur.execute("""
 CREATE TABLE IF NOT EXISTS products(
     id SERIAL PRIMARY KEY,
@@ -51,14 +53,17 @@ CREATE TABLE IF NOT EXISTS products(
 """)
 
 cur.execute("""
+            
 CREATE TABLE IF NOT EXISTS sales(
     id SERIAL PRIMARY KEY,
     product_id INTEGER,
     quantity INTEGER,
     sold_price INTEGER,
-    profit INTEGER
+    profit INTEGER,
+    sold_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 """)
+
 
 conn.commit()
 
@@ -713,6 +718,139 @@ yoki
             reply_markup=menu
         )
 
+# MONTHLY STATS
+@dp.message(Command("month"))
+async def month_stats(message: Message):
+
+    if not await check_user(message):
+        return
+
+    cur.execute("""
+        SELECT COALESCE(SUM(sold_price), 0)
+        FROM sales
+        WHERE DATE_TRUNC('month', sold_at) =
+              DATE_TRUNC('month', CURRENT_DATE)
+    """)
+
+    total_sales = cur.fetchone()[0]
+
+    cur.execute("""
+        SELECT COALESCE(SUM(profit), 0)
+        FROM sales
+        WHERE DATE_TRUNC('month', sold_at) =
+              DATE_TRUNC('month', CURRENT_DATE)
+    """)
+
+    total_profit = cur.fetchone()[0]
+
+    cur.execute("""
+        SELECT COALESCE(SUM(quantity), 0)
+        FROM sales
+        WHERE DATE_TRUNC('month', sold_at) =
+              DATE_TRUNC('month', CURRENT_DATE)
+    """)
+
+    sold_items = cur.fetchone()[0]
+
+    cur.execute("""
+        SELECT
+            products.name,
+            SUM(sales.quantity) as total_sold
+        FROM sales
+        JOIN products
+        ON products.id = sales.product_id
+        WHERE DATE_TRUNC('month', sales.sold_at) =
+              DATE_TRUNC('month', CURRENT_DATE)
+        GROUP BY products.name
+        ORDER BY total_sold DESC
+        LIMIT 5
+    """)
+
+    top_products = cur.fetchall()
+
+    text = f"""
+📅 MONTHLY STATISTICS
+
+💰 Revenue: {total_sales} so'm
+📈 Profit: {total_profit} so'm
+📦 Sold items: {sold_items}
+
+🔥 TOP 5 PRODUCTS:
+"""
+
+    if top_products:
+
+        for i, product in enumerate(top_products, start=1):
+
+            text += (
+                f"\n{i}. {product[0]} "
+                f"— {product[1]} ta"
+            )
+
+    else:
+
+        text += "\nNo sales yet"
+
+    await message.answer(
+        text,
+        reply_markup=menu
+    )
+
+# SALES HISTORY
+@dp.message(Command("sales"))
+async def sales_history(message: Message):
+
+    if not await check_user(message):
+        return
+
+    cur.execute("""
+        SELECT
+            products.name,
+            sales.quantity,
+            sales.sold_price,
+            sales.profit,
+            sales.sold_at
+        FROM sales
+        JOIN products
+        ON products.id = sales.product_id
+        ORDER BY sales.sold_at DESC
+        LIMIT 20
+    """)
+
+    sales = cur.fetchall()
+
+    if not sales:
+
+        await message.answer(
+            "❌ No sales yet",
+            reply_markup=menu
+        )
+
+        return
+
+    text = "📜 SALES HISTORY\n\n"
+
+    for sale in sales:
+
+        name = sale[0]
+        quantity = sale[1]
+        sold_price = sale[2]
+        profit = sale[3]
+        sold_at = sale[4]
+
+        text += (
+            f"📅 {sold_at.strftime('%d-%m-%Y %H:%M')}\n"
+            f"🛍 {name}\n"
+            f"📦 {quantity} ta\n"
+            f"💵 {sold_price} so'm\n"
+            f"📈 Profit: {profit} so'm\n"
+            f"━━━━━━━━━━━━\n"
+        )
+
+    await message.answer(
+        text,
+        reply_markup=menu
+    )
 
 # MAIN
 async def main():
